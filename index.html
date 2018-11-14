@@ -180,7 +180,7 @@
         
           <section id="main" style="float:none;">
   
-    <article id="post-我的测试" class="article article-type-post" itemscope="" itemprop="blogPost">
+    <article id="post-事件模块命令源码解析" class="article article-type-post" itemscope="" itemprop="blogPost">
   <div id="articleInner" class="article-inner">
     
     
@@ -188,7 +188,7 @@
         
   
     <h1 class="thumb" itemprop="name">
-      <a class="article-title" href="/2018/11/14/我的测试/">我的测试</a>
+      <a class="article-title" href="/2018/11/14/事件模块命令源码解析/">事件模块命令源码解析</a>
     </h1>
   
 
@@ -196,25 +196,21 @@
     
     <div class="article-meta">
       
-	<a href="/2018/11/14/我的测试/" class="article-date">
-	  <time datetime="2018-11-14T04:11:32.000Z" itemprop="datePublished">2018-11-14</time>
+	<a href="/2018/11/14/事件模块命令源码解析/" class="article-date">
+	  <time datetime="2018-11-14T06:26:03.000Z" itemprop="datePublished">2018-11-14</time>
 	</a>
 
       
-    <a class="article-category-link" href="/categories/工具/">工具</a>
-
       
     </div>
     <div class="article-entry" itemprop="articleBody">
       
         <p class="article-excerpt-content">
-          test
-aa
-
-
+          对于nginx事件模块的介绍，已经在前面的blog中介绍过了。这里我们介绍一下配置文件中与事件模块有关的重要命令和它们的具体实现。下面是一个配置的例子。123456events&#123;    worker_connections 1024;    use epoll;    multi_accept on;    accept_mutex on;｝
+worker_connections指令worker_connections命令控制每个worker能够建立的最大连接数。12345678...
         </p>
         <p class="article-more-link">
-          <a href="/2018/11/14/我的测试/#more">Read More</a>
+          <a href="/2018/11/14/事件模块命令源码解析/#more">Read More</a>
         </p>
       
     </div>
