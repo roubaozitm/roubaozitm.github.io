@@ -54,8 +54,6 @@
   
   
   
-    <link rel="stylesheet" href="/css/vdonate.css">
-  
 
 </head>
 </html>
@@ -71,105 +69,7 @@
 	
 
     
-      <div id="intrologo" class="intro-logo" style="background-position:center; background-repeat:no-repeat; background-image: url(); background-size: auto 100%;">
-
-      <!-- Support rolling -->  
-        
-        <section class="awSlider">
-          <div class="carousel slide carousel-fade " data-ride="carousel">
-
-            <!-- Wrapper for slides -->
-            <div class="carousel-inner">
-               
-                  
-                    <div class="item active">
-                  
-                    <img id="carousel-img0" src="/css/images/home-bg.jpg">
-                  </div>
-
-                  <!-- 自适应大图 -->
-                  <script>
-                      var img0 = new Image();
-                      var imageTag0 = document.getElementById("carousel-img0");
-                      img0.src = imageTag0.src;
-                      img0.onload=function(){
-                        if (img0.width / img0.height <= document.body.clientWidth / document.body.clientHeight) {
-                          imageTag0.style.width = document.body.clientWidth + "px";
-                        } else {
-                          imageTag0.style.height = document.body.clientHeight + "px";
-                          imageTag0.style.marginLeft = -(document.body.clientHeight * img0.width / img0.height - document.body.clientWidth) / 2 + "px";
-                        }
-                      };
-                  </script>
-                
-                  
-                    <div class="item">
-                  
-                    <img id="carousel-img1" src="/css/images/sample.jpg">
-                  </div>
-
-                  <!-- 自适应大图 -->
-                  <script>
-                      var img1 = new Image();
-                      var imageTag1 = document.getElementById("carousel-img1");
-                      img1.src = imageTag1.src;
-                      img1.onload=function(){
-                        if (img1.width / img1.height <= document.body.clientWidth / document.body.clientHeight) {
-                          imageTag1.style.width = document.body.clientWidth + "px";
-                        } else {
-                          imageTag1.style.height = document.body.clientHeight + "px";
-                          imageTag1.style.marginLeft = -(document.body.clientHeight * img1.width / img1.height - document.body.clientWidth) / 2 + "px";
-                        }
-                      };
-                  </script>
-                
-                  
-                    <div class="item">
-                  
-                    <img id="carousel-img2" src="https://source.unsplash.com/collection/954550/1920x1080">
-                  </div>
-
-                  <!-- 自适应大图 -->
-                  <script>
-                      var img2 = new Image();
-                      var imageTag2 = document.getElementById("carousel-img2");
-                      img2.src = imageTag2.src;
-                      img2.onload=function(){
-                        if (img2.width / img2.height <= document.body.clientWidth / document.body.clientHeight) {
-                          imageTag2.style.width = document.body.clientWidth + "px";
-                        } else {
-                          imageTag2.style.height = document.body.clientHeight + "px";
-                          imageTag2.style.marginLeft = -(document.body.clientHeight * img2.width / img2.height - document.body.clientWidth) / 2 + "px";
-                        }
-                      };
-                  </script>
-                
-            </div>
-
-            <!-- Controls -->
-            <a class="left carousel-control" href=".carousel" role="button" data-slide="prev">
-              <span class="glyphicon glyphicon-chevron-left" aria-hidden="true"></span>
-              <span class="sr-only">Geri</span>
-            </a>
-            <a class="right carousel-control" href=".carousel" role="button" data-slide="next">
-              <span class="glyphicon glyphicon-chevron-right" aria-hidden="true"></span>
-              <span class="sr-only">İleri</span>
-            </a>
-          </div>
-        </section>
-        <script>
-          $('section.awSlider .carousel').carousel({
-              pause: '',
-              interval: 5000
-          });
-          var startImage = $('section.awSlider .item.active > img').attr('src');
-          $('section.awSlider .carousel').on('slid.bs.carousel', function () {
-              var bscn = $(this).find('.item.active > img').attr('src');
-              $('section.awSlider > img').attr('src', bscn);
-          });
-        </script>
-      
-
+      <div id="intrologo" class="intro-logo">
     
  
 
@@ -195,15 +95,44 @@
 
       <!-- 折线Polyline背景 -->
       
+        function i(){
+            x.clearRect(0,0,w,h)
+            q=[{x:0,y:h*.7+f},{x:0,y:h*.7-f}]
+            while(q[1].x<w+f) d(q[0], q[1])
+        }
+        function d(i,j){   
+            x.beginPath()
+            x.moveTo(i.x, i.y)
+            x.lineTo(j.x, j.y)
+            var k = j.x + (z()*2-0.25)*f,
+                n = y(j.y)
+            x.lineTo(k, n)
+            x.closePath()
+            r-=u/-50
+            x.fillStyle = '#'+(v(r)*127+128<<16 | v(r+u/3)*127+128<<8 | v(r+u/3*2)*127+128).toString(16)
+            x.fill()
+            q[0] = q[1]
+            q[1] = {x:k,y:n}
+        }
+        function y(p){
+            var t = p + (z()*2-1.1)*f
+            return (t>h||t<0) ? y(p) : t
+        }
+        document.getElementById("intrologo").onclick = i
+        document.getElementById("intrologo").ontouchstart = i
+        i()
+
+      <!-- 多边形trianglify背景 -->
+      
     </script>
     
 
     
-      <div id="homelogo" class="homelogo" style="background: rgba(255,255,255,1);"> 
+      <div id="homelogo" class="homelogo"> 
     
 
         
-          <div class="homelogoback" style="border: 1px solid #404040;">
+          <div class="homelogoback">
             <h1><a href="#content" id="logo">开心每一天</a></h1>
             <h3></h3>
             <h5></h5>
@@ -238,12 +167,6 @@
         
           <a id="beautifont" class="main-nav-link" href="/archives">Archives</a>
         
-          <a id="beautifont" class="main-nav-link" href="/categories">Categories</a>
-        
-          <a id="beautifont" class="main-nav-link" href="/tags">Tags</a>
-        
-          <a id="beautifont" class="main-nav-link" href="/about">About</a>
-        
       </p>
   </div>
 
@@ -256,6 +179,59 @@
       <div id="content" class="outer">
         
           <section id="main" style="float:none;">
+  
+    <article id="post-我的测试" class="article article-type-post" itemscope="" itemprop="blogPost">
+  <div id="articleInner" class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="thumb" itemprop="name">
+      <a class="article-title" href="/2018/11/14/我的测试/">我的测试</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-meta">
+      
+	<a href="/2018/11/14/我的测试/" class="article-date">
+	  <time datetime="2018-11-14T04:11:32.000Z" itemprop="datePublished">2018-11-14</time>
+	</a>
+
+      
+    <a class="article-category-link" href="/categories/工具/">工具</a>
+
+      
+    </div>
+    <div class="article-entry" itemprop="articleBody">
+      
+        <p class="article-excerpt-content">
+          test
+aa
+
+
+        </p>
+        <p class="article-more-link">
+          <a href="/2018/11/14/我的测试/#more">Read More</a>
+        </p>
+      
+    </div>
+    <footer class="article-footer">
+      
+      
+      
+      
+
+    </footer>
+  </div>
+  
+</article>
+
+<!-- Table of Contents -->
+
+
   
     <article id="post-hello-world" class="article article-type-post" itemscope="" itemprop="blogPost">
   <div id="articleInner" class="article-inner">
@@ -355,12 +331,6 @@ Quick StartCreate a new post1$ hexo new "My New Post...
     <a href="/" class="mobile-nav-link">Home</a>
   
     <a href="/archives" class="mobile-nav-link">Archives</a>
-  
-    <a href="/categories" class="mobile-nav-link">Categories</a>
-  
-    <a href="/tags" class="mobile-nav-link">Tags</a>
-  
-    <a href="/about" class="mobile-nav-link">About</a>
   
 </nav> -->
     
