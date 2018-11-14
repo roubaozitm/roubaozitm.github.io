@@ -180,6 +180,55 @@
         
           <section id="main" style="float:none;">
   
+    <article id="post-nginx事件模块介绍" class="article article-type-post" itemscope="" itemprop="blogPost">
+  <div id="articleInner" class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="thumb" itemprop="name">
+      <a class="article-title" href="/2018/11/14/nginx事件模块介绍/">nginx事件模块介绍</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-meta">
+      
+	<a href="/2018/11/14/nginx事件模块介绍/" class="article-date">
+	  <time datetime="2018-11-14T08:42:27.000Z" itemprop="datePublished">2018-11-14</time>
+	</a>
+
+      
+      
+    </div>
+    <div class="article-entry" itemprop="articleBody">
+      
+        <p class="article-excerpt-content">
+          事件模块的初始化众所周知，nginx是master/worker框架，在nginx启动时是一个进程，在启动的过程中master会fork出了多个子进程作为worker。master主要是管理worker，本身并不处理请求。而worker负责处理请求。因此，事件模块的初始化也是分成两部分。一部分发生在fork出worker前，主要是配置文件解析等操作，另外一部分发生在fork之后，主要是向epoll中添加监听事件。
+启动进程对事件模块的初始化启动进程对事件模块的初始化分为配置文件解析、开始监...
+        </p>
+        <p class="article-more-link">
+          <a href="/2018/11/14/nginx事件模块介绍/#more">Read More</a>
+        </p>
+      
+    </div>
+    <footer class="article-footer">
+      
+      
+      
+      
+
+    </footer>
+  </div>
+  
+</article>
+
+<!-- Table of Contents -->
+
+
+  
     <article id="post-事件模块命令源码解析" class="article article-type-post" itemscope="" itemprop="blogPost">
   <div id="articleInner" class="article-inner">
     

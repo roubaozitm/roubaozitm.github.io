@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html>
+<head><meta name="generator" content="Hexo 3.8.0">
+  <meta charset="utf-8">
+  
+  <title>nginx事件模块介绍 | 开心每一天</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  
+  <meta name="keywords" content="nginx">
+  
+  
+  
+  
+  <meta name="description" content="事件模块的初始化众所周知，nginx是master/worker框架，在nginx启动时是一个进程，在启动的过程中master会fork出了多个子进程作为worker。master主要是管理worker，本身并不处理请求。而worker负责处理请求。因此，事件模块的初始化也是分成两部分。一部分发生在fork出worker前，主要是配置文件解析等操作，另外一部分发生在fork之后，主要是向epoll">
+<meta name="keywords" content="nginx">
+<meta property="og:type" content="article">
+<meta property="og:title" content="nginx事件模块介绍">
+<meta property="og:url" content="http://yoursite.com/2018/11/14/nginx事件模块介绍/index.html">
+<meta property="og:site_name" content="开心每一天">
+<meta property="og:description" content="事件模块的初始化众所周知，nginx是master/worker框架，在nginx启动时是一个进程，在启动的过程中master会fork出了多个子进程作为worker。master主要是管理worker，本身并不处理请求。而worker负责处理请求。因此，事件模块的初始化也是分成两部分。一部分发生在fork出worker前，主要是配置文件解析等操作，另外一部分发生在fork之后，主要是向epoll">
+<meta property="og:locale" content="default">
+<meta property="og:image" content="https://github.com/roubaozitm/images/blob/master/events/1.png?raw=true">
+<meta property="og:image" content="https://github.com/roubaozitm/images/blob/master/events/2.png?raw=true">
+<meta property="og:image" content="https://github.com/roubaozitm/images/blob/master/events/3.png?raw=true">
+<meta property="og:image" content="https://github.com/roubaozitm/images/blob/master/events/4.png?raw=true">
+<meta property="og:image" content="https://github.com/roubaozitm/images/blob/master/events/5.png?raw=true">
+<meta property="og:image" content="https://github.com/roubaozitm/images/blob/master/events/6.png?raw=true">
+<meta property="og:image" content="https://github.com/roubaozitm/images/blob/master/events/7.png?raw=true">
+<meta property="og:image" content="https://github.com/roubaozitm/images/blob/master/events/8.png?raw=true">
+<meta property="og:image" content="https://github.com/roubaozitm/images/blob/master/events/9.png?raw=true">
+<meta property="og:image" content="https://github.com/roubaozitm/images/blob/master/events/10.png?raw=true">
+<meta property="og:image" content="https://github.com/roubaozitm/images/blob/master/events/11.png?raw=true">
+<meta property="og:updated_time" content="2018-11-14T08:48:24.000Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="nginx事件模块介绍">
+<meta name="twitter:description" content="事件模块的初始化众所周知，nginx是master/worker框架，在nginx启动时是一个进程，在启动的过程中master会fork出了多个子进程作为worker。master主要是管理worker，本身并不处理请求。而worker负责处理请求。因此，事件模块的初始化也是分成两部分。一部分发生在fork出worker前，主要是配置文件解析等操作，另外一部分发生在fork之后，主要是向epoll">
+<meta name="twitter:image" content="https://github.com/roubaozitm/images/blob/master/events/1.png?raw=true">
+  
+    <link rel="alternate" href="/atom.xml" title="开心每一天" type="application/atom+xml">
+  
+
+  
+
+  <link rel="icon" href="/css/images/mylogo.jpg">
+  <link rel="apple-touch-icon" href="/css/images/mylogo.jpg">
+  
+    <link href="//fonts.googleapis.com/css?family=Source+Code+Pro" rel="stylesheet" type="text/css">
+  
+  <link href="https://fonts.googleapis.com/css?family=Open+Sans|Montserrat:700" rel="stylesheet" type="text/css">
+  <link href="https://fonts.googleapis.com/css?family=Roboto:400,300,300italic,400italic" rel="stylesheet" type="text/css">
+  <link href="//cdn.bootcss.com/font-awesome/4.6.3/css/font-awesome.min.css" rel="stylesheet">
+  <style type="text/css">
+    @font-face{font-family:futura-pt;src:url(https://use.typekit.net/af/9749f0/00000000000000000001008f/27/l?subset_id=2&fvd=n5) format("woff2");font-weight:500;font-style:normal;}
+    @font-face{font-family:futura-pt;src:url(https://use.typekit.net/af/90cf9f/000000000000000000010091/27/l?subset_id=2&fvd=n7) format("woff2");font-weight:500;font-style:normal;}
+    @font-face{font-family:futura-pt;src:url(https://use.typekit.net/af/8a5494/000000000000000000013365/27/l?subset_id=2&fvd=n4) format("woff2");font-weight:lighter;font-style:normal;}
+    @font-face{font-family:futura-pt;src:url(https://use.typekit.net/af/d337d8/000000000000000000010095/27/l?subset_id=2&fvd=i4) format("woff2");font-weight:400;font-style:italic;}</style>
+  <link rel="stylesheet" href="/css/style.css">
+
+  <script src="/js/jquery-3.1.1.min.js"></script>
+  <script src="/js/bootstrap.js"></script>
+
+  <!-- Bootstrap core CSS -->
+  <link rel="stylesheet" href="/css/bootstrap.css">
+
+  
+    <link rel="stylesheet" href="/css/dialog.css">
+  
+
+  
+
+  
+    <link rel="stylesheet" href="/css/header-post.css">
+  
+
+  
+  
+  
+
+</head>
+</html>
+
+
+  <body data-spy="scroll" data-target="#toc" data-offset="50">
+
+
+  
+  <div id="container">
+    <div id="wrap">
+      
+        <header>
+
+    <div id="allheader" class="navbar navbar-default navbar-static-top" role="navigation">
+        <div class="navbar-inner">
+          
+          <div class="container"> 
+            <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+              <span class="sr-only">Toggle navigation</span>
+              <span class="icon-bar"></span>
+              <span class="icon-bar"></span>
+              <span class="icon-bar"></span>
+            </button>
+
+            
+              <a class="brand" style="border-width: 0;">
+                <p>开心每一天</p>
+              </a>
+            
+            
+            <div class="navbar-collapse collapse">
+              <ul class="hnav navbar-nav">
+                
+                  <li> <a class="main-nav-link" href="/">Home</a> </li>
+                
+                  <li> <a class="main-nav-link" href="/archives">Archives</a> </li>
+                
+                  <li><div id="search-form-wrap">
+
+    <form class="search-form">
+        <input type="text" class="ins-search-input search-form-input" placeholder="">
+        <button type="submit" class="search-form-submit"></button>
+    </form>
+    <div class="ins-search">
+    <div class="ins-search-mask"></div>
+    <div class="ins-search-container">
+        <div class="ins-input-wrapper">
+            <input type="text" class="ins-search-input" placeholder="Type something...">
+            <span class="ins-close ins-selectable"><i class="fa fa-times-circle"></i></span>
+        </div>
+        <div class="ins-section-wrapper">
+            <div class="ins-section-container"></div>
+        </div>
+    </div>
+</div>
+<script>
+(function (window) {
+    var INSIGHT_CONFIG = {
+        TRANSLATION: {
+            POSTS: 'Posts',
+            PAGES: 'Pages',
+            CATEGORIES: 'Categories',
+            TAGS: 'Tags',
+            UNTITLED: '(Untitled)',
+        },
+        ROOT_URL: '/',
+        CONTENT_URL: '/content.json',
+    };
+    window.INSIGHT_CONFIG = INSIGHT_CONFIG;
+})(window);
+</script>
+<script src="/js/insight.js"></script>
+
+</div></li>
+            </ul></div>
+          </div>
+                
+      </div>
+    </div>
+
+</header>
+
+
+
+      
+            
+      <div id="content" class="outer">
+        
+          <section id="main" style="float:none;"><article id="post-nginx事件模块介绍" style="width: 75%; float:left;" class="article article-type-post" itemscope="" itemprop="blogPost">
+  <div id="articleInner" class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="thumb" itemprop="name">
+      nginx事件模块介绍
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-meta">
+      
+	<a href="/2018/11/14/nginx事件模块介绍/" class="article-date">
+	  <time datetime="2018-11-14T08:42:27.000Z" itemprop="datePublished">2018-11-14</time>
+	</a>
+
+      
+      
+	<a class="article-views">
+	<span id="busuanzi_container_page_pv">
+		PV:<span id="busuanzi_value_page_pv"></span>
+	</span>
+	</a>
+
+    </div>
+    <div class="article-entry" itemprop="articleBody">
+      
+        <h2 id="事件模块的初始化"><a href="#事件模块的初始化" class="headerlink" title="事件模块的初始化"></a>事件模块的初始化</h2><p>众所周知，nginx是master/worker框架，在nginx启动时是一个进程，在启动的过程中master会fork出了多个子进程作为worker。master主要是管理worker，本身并不处理请求。而worker负责处理请求。因此，事件模块的初始化也是分成两部分。一部分发生在fork出worker前，主要是配置文件解析等操作，另外一部分发生在fork之后，主要是向epoll中添加监听事件。</p>
+<h3 id="启动进程对事件模块的初始化"><a href="#启动进程对事件模块的初始化" class="headerlink" title="启动进程对事件模块的初始化"></a>启动进程对事件模块的初始化</h3><p>启动进程对事件模块的初始化分为配置文件解析、开始监听端口和ngx_event_core_module模块的初始化。这三个步骤均在ngx_init_cycle函数进行。</p>
+<p>调用关系：main() —&gt; ngx_init_cycle()</p>
+<p>下图是ngx_init_cycle函数的流程，红框是本节将要介绍的三部分内容。</p>
+<p><img src="https://github.com/roubaozitm/images/blob/master/events/1.png?raw=true" alt="image"></p>
+<h4 id="配置文件解析"><a href="#配置文件解析" class="headerlink" title="配置文件解析"></a>配置文件解析</h4><p>启动进程的一个主要工作是解析配置文件。在nginx中，用户主要通过nginx配置文件nginx.conf的event块来控制和调节事件模块的参数。下面是一个event块配置的示例：<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line">user  nobody;</span><br><span class="line">worker_processes  1;</span><br><span class="line">error_log  logs/error.log;</span><br><span class="line">pid        logs/nginx.pid;</span><br><span class="line">......</span><br><span class="line"> </span><br><span class="line">events &#123;</span><br><span class="line">    use epoll;</span><br><span class="line">    worker_connections  1024;</span><br><span class="line">    accept_mutex on；</span><br><span class="line">&#125;</span><br><span class="line"> </span><br><span class="line">http &#123;</span><br><span class="line">    ......</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></p>
+<p>首先我们先看看nginx是如何解析event块，并将event块存储在什么地方。</p>
+<p>在nginx中，解析配置文件的工作是调用ngx_init_cycle函数完成的。下图是该函数在解析配置文件部分的一个流程：</p>
+<p><img src="https://github.com/roubaozitm/images/blob/master/events/2.png?raw=true" alt="image"></p>
+<ul>
+<li>ngx_init_cycle函数首先会进行一些初始化工作，包括更新时间，创建内存池和创建并更新ngx_cycle_t结构体cycle；</li>
+<li>调用各个core模块的create_conf方法，可以创建cycle的conf_ctx数组，该阶段完成后cycle-&gt;conf_ctx如下图所示：</li>
+</ul>
+<p><img src="https://github.com/roubaozitm/images/blob/master/events/3.png?raw=true" alt="image"></p>
+<ul>
+<li>初始化ngx_conf_t类型的结构体conf，将cycle-&gt;conf_ctx结构体赋值给conf的ctx字段</li>
+<li>解析配置文件。解析配置文件会调用ngx_conf_parse函数，该函数会解析一行命令，当遇到块时会递归调用自身。解析的方法也很简单，就是读取一个命令，然后在所有模块的cmd数组中寻找该命令，若找到则调用该命令的cmd-&gt;set()，完成参数的解析。event命令是在event/ngx_event.c文件中定义的，代码如下。<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">static ngx_command_t  ngx_events_commands[] = &#123;</span><br><span class="line"> </span><br><span class="line">    &#123; ngx_string(&quot;events&quot;),</span><br><span class="line">      NGX_MAIN_CONF|NGX_CONF_BLOCK|NGX_CONF_NOARGS,</span><br><span class="line">      ngx_events_block,</span><br><span class="line">      0,</span><br><span class="line">      0,</span><br><span class="line">      NULL &#125;,</span><br><span class="line"> </span><br><span class="line">      ngx_null_command</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+</li>
+</ul>
+<p>在从配置文件中读取到event后，会调用ngx_events_block函数。下面是ngx_events_block函数的主要工作：<br><img src="https://github.com/roubaozitm/images/blob/master/events/4.png?raw=true" alt="image"></p>
+<p>解析完配置文件中的event块后，cycle-&gt;conf_ctx如下图所示：</p>
+<p><img src="https://github.com/roubaozitm/images/blob/master/events/5.png?raw=true" alt="image"></p>
+<ul>
+<li>解析完整个配置文件后，调用各个core类型模块的init_conf方法。ngx_event_module的ctx的init_conf方法为ngx_event_init_conf。该方法并没有实际的用途，暂不详述。</li>
+</ul>
+<h4 id="监听socket"><a href="#监听socket" class="headerlink" title="监听socket"></a>监听socket</h4><p>虽然监听socket和事件模块并没有太多的关系，但是为了使得整个流程完整，此处会简单介绍一下启动进程是如何监听端口的。<br><img src="https://github.com/roubaozitm/images/blob/master/events/6.png?raw=true" alt="image"></p>
+<p>该过程首先检查old_cycle，如果old_cycle中有和cycle中相同的socket，就直接把old_cycle中的fd赋值给cycle。之后会调用ngx_open_listening_socket函数，监听端口。</p>
+<p>下面是ngx_open_listening_sockets函数，该函数的作用是遍历所有需要监听的端口，然后调用socket()，bind()和listen()函数，该函数会重试5次。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br></pre></td><td class="code"><pre><span class="line">ngx_int_t</span><br><span class="line">ngx_open_listening_sockets(ngx_cycle_t *cycle)</span><br><span class="line">&#123;</span><br><span class="line">    ......</span><br><span class="line"> </span><br><span class="line">    /* 重试5次 */</span><br><span class="line">    for (tries = 5; tries; tries--) &#123;</span><br><span class="line">        failed = 0;</span><br><span class="line"> </span><br><span class="line">        /* 遍历需要监听的端口 */</span><br><span class="line">        ls = cycle-&gt;listening.elts;</span><br><span class="line">        for (i = 0; i &lt; cycle-&gt;listening.nelts; i++) &#123;</span><br><span class="line">            ......</span><br><span class="line"> </span><br><span class="line">            /* ngx_socket函数就是socket函数 */</span><br><span class="line">            s = ngx_socket(ls[i].sockaddr-&gt;sa_family, ls[i].type, 0);</span><br><span class="line"> </span><br><span class="line">            ......</span><br><span class="line"> </span><br><span class="line">            /* 设置socket属性 */</span><br><span class="line">            if (setsockopt(s, SOL_SOCKET, SO_REUSEADDR,</span><br><span class="line">                           (const void *) &amp;reuseaddr, sizeof(int))</span><br><span class="line">                == -1)</span><br><span class="line">            &#123;</span><br><span class="line">                ......</span><br><span class="line">            &#125;</span><br><span class="line"> </span><br><span class="line">            ......</span><br><span class="line"> </span><br><span class="line">            /* IOCP事件操作 */</span><br><span class="line">            if (!(ngx_event_flags &amp; NGX_USE_IOCP_EVENT)) &#123;</span><br><span class="line">                if (ngx_nonblocking(s) == -1) &#123;</span><br><span class="line">                    ......</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line"> </span><br><span class="line">            ......</span><br><span class="line"> </span><br><span class="line">            /* 绑定socket和地址 */</span><br><span class="line">            if (bind(s, ls[i].sockaddr, ls[i].socklen) == -1) &#123;</span><br><span class="line">               ......</span><br><span class="line">            &#125;</span><br><span class="line"> </span><br><span class="line">            ......</span><br><span class="line"> </span><br><span class="line">            /* 开始监听 */</span><br><span class="line">            if (listen(s, ls[i].backlog) == -1) &#123;</span><br><span class="line">                ......</span><br><span class="line">            &#125;</span><br><span class="line"> </span><br><span class="line">            ls[i].listen = 1;</span><br><span class="line"> </span><br><span class="line">            ls[i].fd = s;</span><br><span class="line">        &#125;</span><br><span class="line"> </span><br><span class="line">        ......</span><br><span class="line"> </span><br><span class="line">        /* 两次重试间隔500ms */</span><br><span class="line">        ngx_msleep(500);</span><br><span class="line">    &#125;</span><br><span class="line"> </span><br><span class="line">    ......</span><br><span class="line"> </span><br><span class="line">    return NGX_OK;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h4 id="ngx-event-core-module模块的初始化"><a href="#ngx-event-core-module模块的初始化" class="headerlink" title="ngx_event_core_module模块的初始化"></a>ngx_event_core_module模块的初始化</h4><p>在ngx_init_cycle函数监听完端口，并提交新的cycle后，便会调用ngx_init_modules函数，该方法会遍历所有模块并调用其init_module方法。对于该阶段，和事件驱动模块有关系的只有ngx_event_core_module的ngx_event_module_init方法。该方法主要做了下面三个工作：</p>
+<ul>
+<li>获取core模块配置结构体中的时间精度timer_resolution，用在epoll里更新缓存时间</li>
+<li>调用getrlimit方法，检查连接数是否超过系统的资源限制</li>
+<li>利用 mmap 分配一块共享内存，存储负载均衡锁（ngx_accept_mutex）、连接计数器（ngx_connection_counter）</li>
+</ul>
+<h3 id="worker进程对事件模块的初始化"><a href="#worker进程对事件模块的初始化" class="headerlink" title="worker进程对事件模块的初始化"></a>worker进程对事件模块的初始化</h3><p>启动进程在完成一系列操作后，会fork出master进程，并自我关闭，让master进程继续完成初始化工作。master进程会在ngx_spawn_process函数中fork出worker进程，并让worker进程调用ngx_worker_process_cycle函数。ngx_worker_process_cycle函数是worker进程的主循环函数，该函数首先会调用ngx_worker_process_init函数完成worker的初始化，然后就会进入到一个循环中，持续监听处理请求。</p>
+<p><img src="https://github.com/roubaozitm/images/blob/master/events/7.png?raw=true" alt="image"></p>
+<p>事件模块的初始化就发生在ngx_worker_process_init函数中。</p>
+<p>其调用关系：main() —&gt; ngx_master_process_cycle() —&gt; ngx_start_worker_processes() —&gt; ngx_spawn_process() —&gt; ngx_worker_process_cycle() —&gt; ngx_worker_process_init()。</p>
+<p>对于ngx_worker_process_init函数，会调用各个模块的init_process方法：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line">static void</span><br><span class="line">ngx_worker_process_init(ngx_cycle_t *cycle, ngx_int_t worker)</span><br><span class="line">&#123;</span><br><span class="line">     </span><br><span class="line">    ......</span><br><span class="line"> </span><br><span class="line">    for (i = 0; cycle-&gt;modules[i]; i++) &#123;</span><br><span class="line">        if (cycle-&gt;modules[i]-&gt;init_process) &#123;</span><br><span class="line">            if (cycle-&gt;modules[i]-&gt;init_process(cycle) == NGX_ERROR) &#123;</span><br><span class="line">                /* fatal */</span><br><span class="line">                exit(2);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"> </span><br><span class="line">    ......</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>在此处，会调用ngx_event_core_module的ngx_event_process_init函数。该函数较为关键，将会重点解析。在介绍ngx_event_process_init函数前，先介绍两个终于的结构体，由于这两个结构体较为复杂，故只介绍部分字段：</p>
+<ul>
+<li><p>ngx_event_s结构体。nginx中，事件会使用ngx_event_s结构体来表示。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br></pre></td><td class="code"><pre><span class="line">struct ngx_event_s &#123;</span><br><span class="line">    /* 通常指向ngx_connection_t结构体 */</span><br><span class="line">    void            *data;</span><br><span class="line"> </span><br><span class="line">    /* 事件可写 */   </span><br><span class="line">    unsigned         write:1;</span><br><span class="line"> </span><br><span class="line">    /* 事件可建立新连接 */</span><br><span class="line">    unsigned         accept:1;</span><br><span class="line"> </span><br><span class="line">    /* 检测事件是否过期 */</span><br><span class="line">    unsigned         instance:1;</span><br><span class="line"> </span><br><span class="line">    /* 通常将事件加入到epoll中会将该字段置为1 */</span><br><span class="line">    unsigned         active:1;</span><br><span class="line"> </span><br><span class="line">    ......</span><br><span class="line"> </span><br><span class="line">    /* 事件超时 */</span><br><span class="line">    unsigned         timedout:1;</span><br><span class="line"> </span><br><span class="line">    /* 事件是否在定时器中 */</span><br><span class="line">    unsigned         timer_set:1;</span><br><span class="line"> </span><br><span class="line">    ......</span><br><span class="line"> </span><br><span class="line">    /* 事件是否在延迟处理队列中 */</span><br><span class="line">    unsigned         posted:1;</span><br><span class="line"> </span><br><span class="line">    ......</span><br><span class="line"> </span><br><span class="line">    /* 事件的处理函数 */</span><br><span class="line">    ngx_event_handler_pt  handler;</span><br><span class="line"> </span><br><span class="line">    ......</span><br><span class="line"> </span><br><span class="line">    /* 定时器红黑树节点 */</span><br><span class="line">    ngx_rbtree_node_t   timer;</span><br><span class="line"> </span><br><span class="line">    /* 延迟处理队列节点 */</span><br><span class="line">    ngx_queue_t      queue;</span><br><span class="line"> </span><br><span class="line">    ......</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>ngx_connection_s结构体代表一个nginx连接 </p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line">struct ngx_connection_s &#123;</span><br><span class="line">    /* 若该结构体未使用，则指向下一个为使用的ngx_connection_s，若已使用，则指向ngx_http_request_t */</span><br><span class="line">    void               *data;</span><br><span class="line"> </span><br><span class="line">    /* 指向一个读事件结构体，这个读事件结构体表示该连接的读事件 */</span><br><span class="line">    ngx_event_t        *read;</span><br><span class="line"> </span><br><span class="line">    /* 指向一个写事件结构体，这个写事件结构体表示该连接的写事件 */</span><br><span class="line">    ngx_event_t        *write;</span><br><span class="line"> </span><br><span class="line">    /* 连接的套接字 */</span><br><span class="line">    ngx_socket_t        fd;</span><br><span class="line"> </span><br><span class="line">    ......</span><br><span class="line"> </span><br><span class="line">    /* 该连接对应的监听端口，表示是由该端口建立的连接 */</span><br><span class="line">    ngx_listening_t    *listening;</span><br><span class="line"> </span><br><span class="line">    ......</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+</li>
+</ul>
+<p>下面介绍ngx_event_process_init函数的实现，代码如下：<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br><span class="line">112</span><br><span class="line">113</span><br><span class="line">114</span><br><span class="line">115</span><br><span class="line">116</span><br><span class="line">117</span><br><span class="line">118</span><br><span class="line">119</span><br><span class="line">120</span><br><span class="line">121</span><br><span class="line">122</span><br><span class="line">123</span><br><span class="line">124</span><br><span class="line">125</span><br><span class="line">126</span><br><span class="line">127</span><br><span class="line">128</span><br><span class="line">129</span><br><span class="line">130</span><br><span class="line">131</span><br><span class="line">132</span><br><span class="line">133</span><br><span class="line">134</span><br><span class="line">135</span><br></pre></td><td class="code"><pre><span class="line">/* 此方法在worker进程初始化时调用 */</span><br><span class="line">static ngx_int_t</span><br><span class="line">ngx_event_process_init(ngx_cycle_t *cycle)</span><br><span class="line">&#123;</span><br><span class="line">    ......</span><br><span class="line"> </span><br><span class="line">    /* 打开accept_mutex负载均衡锁，用于防止惊群 */</span><br><span class="line">    if (ccf-&gt;master &amp;&amp; ccf-&gt;worker_processes &gt; 1 &amp;&amp; ecf-&gt;accept_mutex) &#123;</span><br><span class="line">        ngx_use_accept_mutex = 1;</span><br><span class="line">        ngx_accept_mutex_held = 0;</span><br><span class="line">        ngx_accept_mutex_delay = ecf-&gt;accept_mutex_delay;</span><br><span class="line"> </span><br><span class="line">    &#125; else &#123;</span><br><span class="line">        ngx_use_accept_mutex = 0;</span><br><span class="line">    &#125;</span><br><span class="line"> </span><br><span class="line">    /* 初始化两个队列，一个用于存放不能及时处理的建立连接事件，一个用于存储不能及时处理的读写事件 */</span><br><span class="line">    ngx_queue_init(&amp;ngx_posted_accept_events);</span><br><span class="line">    ngx_queue_init(&amp;ngx_posted_events);</span><br><span class="line"> </span><br><span class="line">    /* 初始化定时器 */</span><br><span class="line">    if (ngx_event_timer_init(cycle-&gt;log) == NGX_ERROR) &#123;</span><br><span class="line">        return NGX_ERROR;</span><br><span class="line">    &#125;</span><br><span class="line"> </span><br><span class="line">    /**</span><br><span class="line">      * 调用使用的ngx_epoll_module的ctx的actions的init方法，即ngx_epoll_init函数</span><br><span class="line">      * 该函数主要的作用是调用epoll_create()和创建用于epoll_wait()返回事件链表的event_list</span><br><span class="line">      **/</span><br><span class="line">    for (m = 0; cycle-&gt;modules[m]; m++) &#123;</span><br><span class="line">        ......</span><br><span class="line"> </span><br><span class="line">        if (module-&gt;actions.init(cycle, ngx_timer_resolution) != NGX_OK) &#123;</span><br><span class="line">            exit(2);</span><br><span class="line">        &#125;</span><br><span class="line"> </span><br><span class="line">        break;</span><br><span class="line">    &#125;</span><br><span class="line"> </span><br><span class="line">    /* 如果在配置中设置了timer_resolution，则要设置控制时间精度。通过setitimer方法会设置一个定时器，每隔timer_resolution的时间会发送一个SIGALRM信号 */</span><br><span class="line">    if (ngx_timer_resolution &amp;&amp; !(ngx_event_flags &amp; NGX_USE_TIMER_EVENT)) &#123;</span><br><span class="line">        ......</span><br><span class="line">        sa.sa_handler = ngx_timer_signal_handler;</span><br><span class="line">        sigemptyset(&amp;sa.sa_mask);</span><br><span class="line"> </span><br><span class="line">        if (sigaction(SIGALRM, &amp;sa, NULL) == -1) &#123;</span><br><span class="line">            ......</span><br><span class="line">        &#125;</span><br><span class="line"> </span><br><span class="line">        itv.it_interval.tv_sec = ngx_timer_resolution / 1000;</span><br><span class="line">        ......</span><br><span class="line"> </span><br><span class="line">        if (setitimer(ITIMER_REAL, &amp;itv, NULL) == -1) &#123;</span><br><span class="line">            ......</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"> </span><br><span class="line">    ......</span><br><span class="line"> </span><br><span class="line">    /* 分配连接池空间 */</span><br><span class="line">    cycle-&gt;connections =</span><br><span class="line">        ngx_alloc(sizeof(ngx_connection_t) * cycle-&gt;connection_n, cycle-&gt;log);</span><br><span class="line">    ......</span><br><span class="line"> </span><br><span class="line">    c = cycle-&gt;connections;</span><br><span class="line"> </span><br><span class="line">    /* 分配读事件结构体数组空间，并初始化读事件的closed和instance */</span><br><span class="line">    cycle-&gt;read_events = ngx_alloc(sizeof(ngx_event_t) * cycle-&gt;connection_n,</span><br><span class="line">                                   cycle-&gt;log);</span><br><span class="line">    ......</span><br><span class="line"> </span><br><span class="line">    rev = cycle-&gt;read_events;</span><br><span class="line">    for (i = 0; i &lt; cycle-&gt;connection_n; i++) &#123;</span><br><span class="line">        rev[i].closed = 1;</span><br><span class="line">        rev[i].instance = 1;</span><br><span class="line">    &#125;</span><br><span class="line"> </span><br><span class="line">    /* 分配写事件结构体数组空间，并初始化写事件的closed */</span><br><span class="line">    cycle-&gt;write_events = ngx_alloc(sizeof(ngx_event_t) * cycle-&gt;connection_n,</span><br><span class="line">                                    cycle-&gt;log);</span><br><span class="line">    ......</span><br><span class="line"> </span><br><span class="line">    wev = cycle-&gt;write_events;</span><br><span class="line">    for (i = 0; i &lt; cycle-&gt;connection_n; i++) &#123;</span><br><span class="line">        wev[i].closed = 1;</span><br><span class="line">    &#125;</span><br><span class="line"> </span><br><span class="line">    /* 将序号为i的读事件结构体和写事件结构体赋值给序号为i的connections结构体的元素 */</span><br><span class="line">    i = cycle-&gt;connection_n;</span><br><span class="line">    next = NULL;</span><br><span class="line"> </span><br><span class="line">    do &#123;</span><br><span class="line">        i--;</span><br><span class="line">         </span><br><span class="line">        /* 将connection的data字段设置为下一个connection */</span><br><span class="line">        c[i].data = next;</span><br><span class="line">        c[i].read = &amp;cycle-&gt;read_events[i];</span><br><span class="line">        c[i].write = &amp;cycle-&gt;write_events[i];</span><br><span class="line">        c[i].fd = (ngx_socket_t) -1;</span><br><span class="line"> </span><br><span class="line">        next = &amp;c[i];</span><br><span class="line">    &#125; while (i);</span><br><span class="line"> </span><br><span class="line">    /* 初始化cycle-&gt;free_connections */</span><br><span class="line">    cycle-&gt;free_connections = next;</span><br><span class="line">    cycle-&gt;free_connection_n = cycle-&gt;connection_n;</span><br><span class="line">     </span><br><span class="line">    /* 为每个监听端口分配连接 */</span><br><span class="line">    ls = cycle-&gt;listening.elts;</span><br><span class="line">    for (i = 0; i &lt; cycle-&gt;listening.nelts; i++) &#123;</span><br><span class="line"> </span><br><span class="line">        ......</span><br><span class="line"> </span><br><span class="line">        c = ngx_get_connection(ls[i].fd, cycle-&gt;log);</span><br><span class="line"> </span><br><span class="line">        ......</span><br><span class="line"> </span><br><span class="line">        rev = c-&gt;read;</span><br><span class="line"> </span><br><span class="line">        ......</span><br><span class="line"> </span><br><span class="line">        /* 为监听的端口的connection结构体的read事件设置回调函数 */</span><br><span class="line">        rev-&gt;handler = (c-&gt;type == SOCK_STREAM) ? ngx_event_accept</span><br><span class="line">                                                : ngx_event_recvmsg;</span><br><span class="line">                                  </span><br><span class="line">        /* 将监听的connection的read事件添加到事件驱动模块（epoll） */</span><br><span class="line">        ......</span><br><span class="line">        if (ngx_add_event(rev, NGX_READ_EVENT, 0) == NGX_ERROR) &#123;</span><br><span class="line">            return NGX_ERROR;</span><br><span class="line">        &#125;</span><br><span class="line"> </span><br><span class="line">    &#125;</span><br><span class="line"> </span><br><span class="line">    return NGX_OK;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></p>
+<p>该方法主要做了下面几件事：</p>
+<ul>
+<li>打开accept_mutex负载均衡锁，用于防止惊群。惊群是指当多个worker都处于等待事件状态，如果突然来了一个请求，就会同时唤醒多个worker，但是只有一个worker会处理该请求，这就造成系统资源浪费。为了解决这个问题，nginx使用了accept_mutex负载均衡锁。各个worker首先会抢锁，抢到锁的worker才会监听各个端口。</li>
+<li>初始化两个队列，一个用于存放不能及时处理的建立连接事件，一个用于存储不能及时处理的读写事件。</li>
+<li>初始化定时器，该定时器就是一颗红黑树，根据时间对事件进行排序。</li>
+<li>调用使用的ngx_epoll_module的ctx的actions的init方法，即ngx_epoll_init函数。该函数较为简单，主要的作用是调用epoll_create()和创建用于存储epoll_wait()返回事件的链表event_list。</li>
+<li>如果再配置中设置了timer_resolution，则要设置控制时间精度，用于控制nginx时间。这部分在后面重点讲解。</li>
+<li>分配连接池空间、读事件结构体数组、写事件结构体数组。上文介绍了ngx_connection_s和ngx_event_s结构体，我们了解到每一个ngx_connection_s结构体都有两个ngx_event_s结构体，一个读事件，一个写事件。在这个阶段，会向内存池中申请三个数组：cycle-&gt;connections、cycle-&gt;read_events和cycle-&gt;write_events，并将序号为i的读事件结构体和写事件结构体赋值给序号为i的connections结构体的元素。并将cycle-&gt;free_connections指向第一个未使用的ngx_connections结构体。<br><img src="https://github.com/roubaozitm/images/blob/master/events/8.png?raw=true" alt="image"></li>
+<li>为每个监听端口分配连接。在此阶段，会获取cycle-&gt;listening数组中的ngx_listening_s结构体元素。在前面，我们已经讲了nginx启动进程会监听端口，并将socket连接的fd存储在cycle-&gt;listening数组中。在这里，会获取监听的端口，并为每个监听分配连接结构体。</li>
+<li>为每个监听端口的连接的读事件设置handler。在为cycle-&gt;listening的元素分配完ngx_connection_s类型的连接后，会为连接的读事件设置回调方法handler。这里handler为ngx_event_accept函数，对于该函数，将在后文讲解。</li>
+<li>将每个监听端口的连接的读事件添加到epoll中。在此处，会调用ngx_epoll_module的ngx_epoll_add_event函数，将监听端口的连接的读事件(ls[i].connection-&gt;read)添加到epoll中。ngx_epoll_add_event函数的流程如下：<br><img src="https://github.com/roubaozitm/images/blob/master/events/9.png?raw=true" alt="image"></li>
+</ul>
+<p>在向epoll中添加事件前，需要判断之前是否添加过该连接的事件。<br>至此，ngx_event_process_init的工作完成，事件模块的初始化也完成了。后面worker开始进入循环监听阶段。</p>
+<h2 id="事件处理"><a href="#事件处理" class="headerlink" title="事件处理"></a>事件处理</h2><h3 id="worker的主循环函数ngx-worker-process-cycle"><a href="#worker的主循环函数ngx-worker-process-cycle" class="headerlink" title="worker的主循环函数ngx_worker_process_cycle"></a>worker的主循环函数ngx_worker_process_cycle</h3><p>worker在初始化完成之后，开始循环监听端口，并处理请求。下面开始我们开始讲解worker是如何处理事件的。worker的循环代码如下：<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br></pre></td><td class="code"><pre><span class="line">static void</span><br><span class="line">ngx_worker_process_cycle(ngx_cycle_t *cycle, void *data)</span><br><span class="line">&#123;</span><br><span class="line">    ngx_int_t worker = (intptr_t) data;</span><br><span class="line"> </span><br><span class="line">    ngx_process = NGX_PROCESS_WORKER;</span><br><span class="line">    ngx_worker = worker;</span><br><span class="line"> </span><br><span class="line">    /* 初始化worker */</span><br><span class="line">    ngx_worker_process_init(cycle, worker);</span><br><span class="line"> </span><br><span class="line">    ngx_setproctitle(&quot;worker process&quot;);</span><br><span class="line"> </span><br><span class="line">    for ( ;; ) &#123;</span><br><span class="line"> </span><br><span class="line">        if (ngx_exiting) &#123;</span><br><span class="line">            ......</span><br><span class="line">        &#125;</span><br><span class="line"> </span><br><span class="line">        ngx_log_debug0(NGX_LOG_DEBUG_EVENT, cycle-&gt;log, 0, &quot;worker cycle&quot;);</span><br><span class="line"> </span><br><span class="line">        /* 处理IO事件和时间事件 */</span><br><span class="line">        ngx_process_events_and_timers(cycle);</span><br><span class="line"> </span><br><span class="line">        if (ngx_terminate) &#123;</span><br><span class="line">            ......</span><br><span class="line">        &#125;</span><br><span class="line"> </span><br><span class="line">        if (ngx_quit) &#123;</span><br><span class="line">            ......</span><br><span class="line">        &#125;</span><br><span class="line"> </span><br><span class="line">        if (ngx_reopen) &#123;</span><br><span class="line">            ......</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></p>
+<p>可以看到，在worker初始化后进入一个for循环，所有的IO事件和时间事件都是在函数ngx_process_events_and_timers中处理的。</p>
+<h3 id="worker的事件处理函数ngx-process-events-and-timers"><a href="#worker的事件处理函数ngx-process-events-and-timers" class="headerlink" title="worker的事件处理函数ngx_process_events_and_timers"></a>worker的事件处理函数ngx_process_events_and_timers</h3><p>在worker的主循环中，所有的事件都是通过函数ngx_process_events_and_timers处理的，该函数的代码如下：<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br></pre></td><td class="code"><pre><span class="line">/* 事件处理函数和定时器处理函数 */</span><br><span class="line">void</span><br><span class="line">ngx_process_events_and_timers(ngx_cycle_t *cycle)</span><br><span class="line">&#123;</span><br><span class="line">    ngx_uint_t  flags;</span><br><span class="line">    ngx_msec_t  timer, delta;</span><br><span class="line"> </span><br><span class="line">    /* timer_resolution模式，设置epoll_wait函数阻塞ngx_timer_resolution的时间 */</span><br><span class="line">    if (ngx_timer_resolution) &#123;</span><br><span class="line">        /* timer_resolution模式 */</span><br><span class="line">        timer = NGX_TIMER_INFINITE;</span><br><span class="line">        flags = 0;</span><br><span class="line"> </span><br><span class="line">    &#125; else &#123;</span><br><span class="line">        /* 非timer_resolution模式，epoll_wait函数等待至下一个定时器事件到来时返回 */</span><br><span class="line">        timer = ngx_event_find_timer();</span><br><span class="line">        flags = NGX_UPDATE_TIME;</span><br><span class="line">    &#125;</span><br><span class="line"> </span><br><span class="line">    /* 是否使用accept_mutex */</span><br><span class="line">    if (ngx_use_accept_mutex) &#123;</span><br><span class="line">        /**</span><br><span class="line">         * 该worker是否负载过高，若负载过高则不抢锁</span><br><span class="line">         * 判断负载过高是判断该worker建立的连接数是否大于该worker可以建立的最大连接数的7/8</span><br><span class="line">         **/</span><br><span class="line">        if (ngx_accept_disabled &gt; 0) &#123;</span><br><span class="line">            ngx_accept_disabled--;</span><br><span class="line"> </span><br><span class="line">        &#125; else &#123;</span><br><span class="line">            /* 抢锁 */</span><br><span class="line">            if (ngx_trylock_accept_mutex(cycle) == NGX_ERROR) &#123;</span><br><span class="line">                return;</span><br><span class="line">            &#125;</span><br><span class="line"> </span><br><span class="line">            if (ngx_accept_mutex_held) &#123;</span><br><span class="line">                /* 抢到锁，则收到事件后暂不处理，先扔到事件队列中 */</span><br><span class="line">                flags |= NGX_POST_EVENTS;</span><br><span class="line"> </span><br><span class="line">            &#125; else &#123;</span><br><span class="line">                /* 未抢到锁，要修改worker在epoll_wait函数等待的时间，使其不要过大 */</span><br><span class="line">                if (timer == NGX_TIMER_INFINITE</span><br><span class="line">                    || timer &gt; ngx_accept_mutex_delay)</span><br><span class="line">                &#123;</span><br><span class="line">                    timer = ngx_accept_mutex_delay;</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"> </span><br><span class="line">    /* delta用于计算ngx_process_events的耗时 */</span><br><span class="line">    delta = ngx_current_msec;</span><br><span class="line"> </span><br><span class="line">    /* 事件处理函数，epoll使用的是ngx_epoll_process_events函数 */</span><br><span class="line">    (void) ngx_process_events(cycle, timer, flags);</span><br><span class="line"> </span><br><span class="line">    delta = ngx_current_msec - delta;</span><br><span class="line"> </span><br><span class="line">    ngx_log_debug1(NGX_LOG_DEBUG_EVENT, cycle-&gt;log, 0,</span><br><span class="line">                   &quot;timer delta: %M&quot;, delta);</span><br><span class="line"> </span><br><span class="line">    /* 处理ngx_posted_accept_events队列的连接事件 */</span><br><span class="line">    ngx_event_process_posted(cycle, &amp;ngx_posted_accept_events);</span><br><span class="line"> </span><br><span class="line">    /* 若持有accept_mutex，则释放锁 */</span><br><span class="line">    if (ngx_accept_mutex_held) &#123;</span><br><span class="line">        ngx_shmtx_unlock(&amp;ngx_accept_mutex);</span><br><span class="line">    &#125;</span><br><span class="line"> </span><br><span class="line">    /* 若事件处理函数的执行时间不为0，则要处理定时器事件 */</span><br><span class="line">    if (delta) &#123;</span><br><span class="line">        ngx_event_expire_timers();</span><br><span class="line">    &#125;</span><br><span class="line"> </span><br><span class="line">    /* 处理ngx_posted_events队列的读写事件 */</span><br><span class="line">    ngx_event_process_posted(cycle, &amp;ngx_posted_events);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></p>
+<p>ngx_process_events_and_timers函数是nginx处理事件的核心函数，主要的工作可以分为下面几部分：</p>
+<ul>
+<li>设置nginx更新时间的方式。</li>
+</ul>
+<p>nginx会将时间存储在内存中，每隔一段时间调用ngx_time_update函数更新时间。那么多久更新一次呢？nginx提供两种方式：</p>
+<p>方式一：timer_resolution模式。在nginx配置文件中，可以使用timer_resolution之类来选择此方式。如果使用此方式，会将epoll_wait的阻塞时间设置为无穷大，即一直阻塞。那么如果nginx一直都没有收到事件，会一直阻塞吗？答案是不会的。在上文中讲解的ngx_event_process_init函数(第5步)将会设置一个时间定时器和一个信号处理函数，其中时间定时器会每隔timer_resolution的时间发送一个SIGALRM信号，而当worker收到时间定时器发送的信号，会将epoll_wait函数终端，同时调用SIGALRM信号的中断处理函数，将全局变量ngx_event_timer_alarm置为1。后面会检查该变量，调用ngx_time_update函数来更新nginx的时间。</p>
+<p>方式二：如果不在配置文件中设置timer_resolution，nginx默认会使用方式二来更新nginx的时间。首先会调用ngx_event_find_timer函数来设置epoll_wait的阻塞时间，ngx_event_find_timer函数返回的是下一个时间事件发生的时间与当前时间的差值，即让epoll_wait阻塞到下一个时间事件发生为止。当使用这种模式，每当epoll_wait返回，都会调用ngx_time_update函数更新时间。</p>
+<ul>
+<li>使用负载均衡锁ngx_use_accept_mutex。</li>
+</ul>
+<p>上文曾经提过一个问题，当多个worker都处于等待事件状态，如果突然来了一个请求，就会同时唤醒多个worker，但是只有一个worker会处理该请求，这就造成系统资源浪费。nginx如果解决这个问题呢？答案就是使用一个锁来解决。在监听事件前，各个worker会进行一次抢锁行为，只有抢到锁的worker才会监听端口，而其他worker值处理已经建立连接的事件。</p>
+<p>首先函数会通过ngx_accept_disabled是否大于0来判断是否过载，过载的worker是不允许抢锁的。ngx_accept_disabled的计算方式如下。<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">/**</span><br><span class="line"> * ngx_cycle-&gt;connection_n是每个进程最大连接数，也是连接池的总连接数，ngx_cycle-&gt;free_connection_n是连接池中未使用的连接数量。</span><br><span class="line"> * 当未使用的数量小于总数量的1/8时，会使ngx_accept_disabled大于0。这时认为该worker过载。</span><br><span class="line"> **/</span><br><span class="line">ngx_accept_disabled = ngx_cycle-&gt;connection_n / 8 - ngx_cycle-&gt;free_connection_n;</span><br></pre></td></tr></table></figure></p>
+<p>若ngx_accept_disabled小于0，worker可以抢锁。这时会通过ngx_trylock_accept_mutex函数抢锁。该函数的流程如下图所示：<br><img src="https://github.com/roubaozitm/images/blob/master/events/10.png?raw=true" alt="image"></p>
+<p>在抢锁结束后，若worker抢到锁，设置该worker的flag为NGX_POST_EVENTS，表示抢到锁的这个worker在收到事件后并不会立即调用事件的处理函数，而是会把事件放到一个队列里，后期处理。</p>
+<ul>
+<li>调用事件处理函数ngx_process_events，epoll使用的是ngx_epoll_process_events函数。此代码较为重要，下面是代码：</li>
+</ul>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br><span class="line">112</span><br><span class="line">113</span><br><span class="line">114</span><br><span class="line">115</span><br><span class="line">116</span><br><span class="line">117</span><br><span class="line">118</span><br><span class="line">119</span><br><span class="line">120</span><br><span class="line">121</span><br><span class="line">122</span><br><span class="line">123</span><br><span class="line">124</span><br><span class="line">125</span><br><span class="line">126</span><br><span class="line">127</span><br><span class="line">128</span><br><span class="line">129</span><br><span class="line">130</span><br><span class="line">131</span><br><span class="line">132</span><br><span class="line">133</span><br><span class="line">134</span><br><span class="line">135</span><br><span class="line">136</span><br><span class="line">137</span><br><span class="line">138</span><br><span class="line">139</span><br><span class="line">140</span><br><span class="line">141</span><br><span class="line">142</span><br><span class="line">143</span><br><span class="line">144</span><br><span class="line">145</span><br><span class="line">146</span><br><span class="line">147</span><br><span class="line">148</span><br><span class="line">149</span><br><span class="line">150</span><br><span class="line">151</span><br><span class="line">152</span><br><span class="line">153</span><br></pre></td><td class="code"><pre><span class="line">static ngx_int_t</span><br><span class="line">ngx_epoll_process_events(ngx_cycle_t *cycle, ngx_msec_t timer, ngx_uint_t flags)</span><br><span class="line">&#123;</span><br><span class="line">    int                events;</span><br><span class="line">     </span><br><span class="line">    uint32_t           revents;</span><br><span class="line">    ngx_int_t          instance, i;</span><br><span class="line">    ngx_uint_t         level;</span><br><span class="line">    ngx_err_t          err;</span><br><span class="line">    ngx_event_t       *rev, *wev;</span><br><span class="line">    ngx_queue_t       *queue;</span><br><span class="line">    ngx_connection_t  *c;</span><br><span class="line"> </span><br><span class="line">    ngx_log_debug1(NGX_LOG_DEBUG_EVENT, cycle-&gt;log, 0,</span><br><span class="line">                   &quot;epoll timer: %M&quot;, timer);</span><br><span class="line"> </span><br><span class="line">    /* 调用epoll_wait，从epoll中获取发生的事件 */</span><br><span class="line">    events = epoll_wait(ep, event_list, (int) nevents, timer);</span><br><span class="line"> </span><br><span class="line">    err = (events == -1) ? ngx_errno : 0;</span><br><span class="line"> </span><br><span class="line">    /* 两种方式更新nginx时间，timer_resolution模式ngx_event_timer_alarm为1，非timer_resolution模式flags &amp; NGX_UPDATE_TIME不为0，均会进入if条件 */</span><br><span class="line">    if (flags &amp; NGX_UPDATE_TIME || ngx_event_timer_alarm) &#123;</span><br><span class="line">        ngx_time_update();</span><br><span class="line">    &#125;</span><br><span class="line"> </span><br><span class="line">    /* 处理epoll_wait返回为-1的情况 */</span><br><span class="line">    if (err) &#123;</span><br><span class="line"> </span><br><span class="line">        /**</span><br><span class="line">         * 对于timer_resolution模式，如果worker接收到SIGALRM信号，会调用该信号的处理函数，将ngx_event_timer_alarm置为1，从而更新时间。</span><br><span class="line">         * 同时如果在epoll_wait阻塞的过程中接收到SIGALRM信号，会中断epoll_wait，使其返回NGX_EINTR。由于上一步已经更新了时间，这里要把ngx_event_timer_alarm置为0。</span><br><span class="line">         **/</span><br><span class="line">        if (err == NGX_EINTR) &#123;</span><br><span class="line"> </span><br><span class="line">            if (ngx_event_timer_alarm) &#123;</span><br><span class="line">                ngx_event_timer_alarm = 0;</span><br><span class="line">                return NGX_OK;</span><br><span class="line">            &#125;</span><br><span class="line"> </span><br><span class="line">            level = NGX_LOG_INFO;</span><br><span class="line"> </span><br><span class="line">        &#125; else &#123;</span><br><span class="line">            level = NGX_LOG_ALERT;</span><br><span class="line">        &#125;</span><br><span class="line"> </span><br><span class="line">        ngx_log_error(level, cycle-&gt;log, err, &quot;epoll_wait() failed&quot;);</span><br><span class="line">        return NGX_ERROR;</span><br><span class="line">    &#125;</span><br><span class="line"> </span><br><span class="line">    /* 若events返回为0，判断是因为epoll_wait超时还是其他原因 */</span><br><span class="line">    if (events == 0) &#123;</span><br><span class="line">        if (timer != NGX_TIMER_INFINITE) &#123;</span><br><span class="line">            return NGX_OK;</span><br><span class="line">        &#125;</span><br><span class="line"> </span><br><span class="line">        ngx_log_error(NGX_LOG_ALERT, cycle-&gt;log, 0,</span><br><span class="line">                      &quot;epoll_wait() returned no events without timeout&quot;);</span><br><span class="line">        return NGX_ERROR;</span><br><span class="line">    &#125;</span><br><span class="line"> </span><br><span class="line">    /* 对epoll_wait返回的链表进行遍历 */</span><br><span class="line">    for (i = 0; i &lt; events; i++) &#123;</span><br><span class="line">        c = event_list[i].data.ptr;</span><br><span class="line"> </span><br><span class="line">        /* 从data中获取connection &amp; instance的值，并解析出instance和connection */</span><br><span class="line">        instance = (uintptr_t) c &amp; 1;</span><br><span class="line">        c = (ngx_connection_t *) ((uintptr_t) c &amp; (uintptr_t) ~1);</span><br><span class="line"> </span><br><span class="line">        /* 取出connection的read事件 */</span><br><span class="line">        rev = c-&gt;read;</span><br><span class="line"> </span><br><span class="line">        /* 判断读事件是否过期 */</span><br><span class="line">        if (c-&gt;fd == -1 || rev-&gt;instance != instance) &#123;</span><br><span class="line">            ngx_log_debug1(NGX_LOG_DEBUG_EVENT, cycle-&gt;log, 0,</span><br><span class="line">                           &quot;epoll: stale event %p&quot;, c);</span><br><span class="line">            continue;</span><br><span class="line">        &#125;</span><br><span class="line"> </span><br><span class="line">        /* 取出事件的类型 */</span><br><span class="line">        revents = event_list[i].events;</span><br><span class="line"> </span><br><span class="line">        ngx_log_debug3(NGX_LOG_DEBUG_EVENT, cycle-&gt;log, 0,</span><br><span class="line">                       &quot;epoll: fd:%d ev:%04XD d:%p&quot;,</span><br><span class="line">                       c-&gt;fd, revents, event_list[i].data.ptr);</span><br><span class="line"> </span><br><span class="line">        /* 若连接发生错误，则将EPOLLIN、EPOLLOUT添加到revents中，在调用读写事件时能够处理连接的错误 */</span><br><span class="line">        if (revents &amp; (EPOLLERR|EPOLLHUP)) &#123;</span><br><span class="line">            ngx_log_debug2(NGX_LOG_DEBUG_EVENT, cycle-&gt;log, 0,</span><br><span class="line">                           &quot;epoll_wait() error on fd:%d ev:%04XD&quot;,</span><br><span class="line">                           c-&gt;fd, revents);</span><br><span class="line"> </span><br><span class="line">            revents |= EPOLLIN|EPOLLOUT;</span><br><span class="line">        &#125;</span><br><span class="line"> </span><br><span class="line">        /* 事件为读事件且读事件在epoll中 */</span><br><span class="line">        if ((revents &amp; EPOLLIN) &amp;&amp; rev-&gt;active) &#123;</span><br><span class="line"> </span><br><span class="line">#if (NGX_HAVE_EPOLLRDHUP)</span><br><span class="line">            if (revents &amp; EPOLLRDHUP) &#123;</span><br><span class="line">                rev-&gt;pending_eof = 1;</span><br><span class="line">            &#125;</span><br><span class="line"> </span><br><span class="line">            rev-&gt;available = 1;</span><br><span class="line">#endif</span><br><span class="line"> </span><br><span class="line">            rev-&gt;ready = 1;</span><br><span class="line"> </span><br><span class="line">            /* 事件是否需要延迟处理？对于抢到锁监听端口的worker，会将事件延迟处理 */</span><br><span class="line">            if (flags &amp; NGX_POST_EVENTS) &#123;</span><br><span class="line">                /* 根据事件的是否是accept事件，加到不同的队列中 */</span><br><span class="line">                queue = rev-&gt;accept ? &amp;ngx_posted_accept_events</span><br><span class="line">                                    : &amp;ngx_posted_events;</span><br><span class="line"> </span><br><span class="line">                ngx_post_event(rev, queue);</span><br><span class="line"> </span><br><span class="line">            &#125; else &#123;</span><br><span class="line">                /* 若不需要延迟处理，直接调用read事件的handler */</span><br><span class="line">                rev-&gt;handler(rev);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line"> </span><br><span class="line">        /* 取出connection的write事件 */</span><br><span class="line">        wev = c-&gt;write;</span><br><span class="line"> </span><br><span class="line">        /* 事件为写事件且写事件在epoll中 */</span><br><span class="line">        if ((revents &amp; EPOLLOUT) &amp;&amp; wev-&gt;active) &#123;</span><br><span class="line"> </span><br><span class="line">            /* 判断写事件是否过期 */</span><br><span class="line">            if (c-&gt;fd == -1 || wev-&gt;instance != instance) &#123;</span><br><span class="line">                ngx_log_debug1(NGX_LOG_DEBUG_EVENT, cycle-&gt;log, 0,</span><br><span class="line">                               &quot;epoll: stale event %p&quot;, c);</span><br><span class="line">                continue;</span><br><span class="line">            &#125;</span><br><span class="line"> </span><br><span class="line">            wev-&gt;ready = 1;</span><br><span class="line">#if (NGX_THREADS)</span><br><span class="line">            wev-&gt;complete = 1;</span><br><span class="line">#endif</span><br><span class="line"> </span><br><span class="line">            /* 事件是否需要延迟处理？对于抢到锁监听端口的worker，会将事件延迟处理 */</span><br><span class="line">            if (flags &amp; NGX_POST_EVENTS) &#123;</span><br><span class="line">                ngx_post_event(wev, &amp;ngx_posted_events);</span><br><span class="line"> </span><br><span class="line">            &#125; else &#123;</span><br><span class="line">                /* 若不需要延迟处理，直接调用write事件的handler */</span><br><span class="line">                wev-&gt;handler(wev);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"> </span><br><span class="line">    return NGX_OK;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>该函数的流程图如下：</p>
+<p><img src="https://github.com/roubaozitm/images/blob/master/events/11.png?raw=true" alt="image"></p>
+<ul>
+<li>计算ngx_process_events函数的调用时间。</li>
+<li>处理ngx_posted_accept_events队列的连接事件。这里就是遍历ngx_posted_accept_events队列，调用事件的handler方法，这里accept事件的handler为ngx_event_accept。</li>
+<li>释放负载均衡锁。</li>
+<li>处理定时器事件，具体操作是在定时器红黑树中查找过期的事件，调用其handler方法。</li>
+<li>处理ngx_posted_events队列的读写事件，即遍历ngx_posted_events队列，调用事件的handler方法。</li>
+</ul>
+<p>至此，我们介绍完了nginx事件模块的事件处理函数ngx_process_events_and_timers。nginx事件模块的相关知识也初步介绍完了。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      
+      
+      <div>
+        <ul class="post-copyright">
+          <li class="post-copyright-author">
+          <strong>Post author:  </strong>
+          </li>
+          <li class="post-copyright-link">
+          <strong>Post link:  </strong>
+          <a href="/2018/11/14/nginx事件模块介绍/" target="_blank" title="nginx事件模块介绍">http://yoursite.com/2018/11/14/nginx事件模块介绍/</a>
+          </li>
+          <li class="post-copyright-license">
+            <strong>Copyright Notice:   </strong>
+            All articles in this blog are licensed under <a rel="license" href="https://creativecommons.org/licenses/by-nc-nd/4.0/" target="_blank" title="Attribution-NonCommercial-NoDerivatives 4.0 International (CC BY-NC-ND 4.0)">CC BY-NC-ND 4.0</a>
+            unless stating additionally.
+          </li>
+         
+        </ul>
+<div>
+</div></div>
+      
+      
+        
+	<section id="comments" class="comment">
+	  <div id="disqus_thread">
+	  <noscript>Please enable JavaScript to view the <a href="//disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+	  </div>
+	</section>
+
+	<script type="text/javascript">
+	var disqus_shortname = 'roubaozitm';
+	(function(){
+	  var dsq = document.createElement('script');
+	  dsq.type = 'text/javascript';
+	  dsq.async = true;
+	  dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+	  (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+	}());
+	(function(){
+	  var dsq = document.createElement('script');
+	  dsq.type = 'text/javascript';
+	  dsq.async = true;
+	  dsq.src = '//' + disqus_shortname + '.disqus.com/count.js';
+	  (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+	}());
+	</script>
+
+
+
+      
+      
+
+    </footer>
+  </div>
+  
+    
+<nav id="article-nav">
+  
+  
+    <a href="/2018/11/14/事件模块命令源码解析/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">Older</strong>
+      <div class="article-nav-title">事件模块命令源码解析</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+
+<!-- Table of Contents -->
+
+  <aside id="toc-sidebar">
+    <div id="toc" class="toc-article">
+    <strong class="toc-title">Contents</strong>
+    
+        <ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#事件模块的初始化"><span class="nav-number">1.</span> <span class="nav-text">事件模块的初始化</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#启动进程对事件模块的初始化"><span class="nav-number">1.1.</span> <span class="nav-text">启动进程对事件模块的初始化</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#配置文件解析"><span class="nav-number">1.1.1.</span> <span class="nav-text">配置文件解析</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#监听socket"><span class="nav-number">1.1.2.</span> <span class="nav-text">监听socket</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#ngx-event-core-module模块的初始化"><span class="nav-number">1.1.3.</span> <span class="nav-text">ngx_event_core_module模块的初始化</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#worker进程对事件模块的初始化"><span class="nav-number">1.2.</span> <span class="nav-text">worker进程对事件模块的初始化</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#事件处理"><span class="nav-number">2.</span> <span class="nav-text">事件处理</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#worker的主循环函数ngx-worker-process-cycle"><span class="nav-number">2.1.</span> <span class="nav-text">worker的主循环函数ngx_worker_process_cycle</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#worker的事件处理函数ngx-process-events-and-timers"><span class="nav-number">2.2.</span> <span class="nav-text">worker的事件处理函数ngx_process_events_and_timers</span></a></li></ol></li></ol>
+    
+    </div>
+  </aside>
+
+</section>
+        
+      </div>
+      
+      <footer id="footer">
+  
+
+  <div class="container">
+      	<div class="row">
+	      <p> Powered by <a href="http://hexo.io/" target="_blank">Hexo</a> and <a href="https://github.com/iTimeTraveler/hexo-theme-hiker" target="_blank">Hexo-theme-hiker</a> </p>
+	      <p id="copyRightEn">Copyright &copy; 2013 - 2018 开心每一天 All Rights Reserved.</p>
+	      
+	      
+    		<p class="busuanzi_uv">
+				UV : <span id="busuanzi_value_site_uv"></span> |  
+				PV : <span id="busuanzi_value_site_pv"></span>
+		    </p>
+  		   
+		</div>
+
+		
+  </div>
+</footer>
+
+
+<!-- min height -->
+
+<script>
+    var wrapdiv = document.getElementById("wrap");
+    var contentdiv = document.getElementById("content");
+    var allheader = document.getElementById("allheader");
+
+    wrapdiv.style.minHeight = document.body.offsetHeight + "px";
+    if (allheader != null) {
+      contentdiv.style.minHeight = document.body.offsetHeight - allheader.offsetHeight - document.getElementById("footer").offsetHeight + "px";
+    } else {
+      contentdiv.style.minHeight = document.body.offsetHeight - document.getElementById("footer").offsetHeight + "px";
+    }
+</script>
+    </div>
+    <!-- <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">Home</a>
+  
+    <a href="/archives" class="mobile-nav-link">Archives</a>
+  
+</nav> -->
+    
+
+<!-- mathjax config similar to math.stackexchange -->
+
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Config({
+    tex2jax: {
+      inlineMath: [ ['$','$'], ["\\(","\\)"] ],
+      processEscapes: true
+    }
+  });
+</script>
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+      tex2jax: {
+        skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+      }
+    });
+</script>
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for(i=0; i < all.length; i += 1) {
+            all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+    });
+</script>
+
+<script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+</script>
+
+
+  <link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+  <script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+<script src="/js/scripts.js"></script>
+
+
+
+
+  <script src="/js/dialog.js"></script>
+
+
+
+
+
+
+
+
+	<div style="display: none;">
+    <script src="https://s95.cnzz.com/z_stat.php?id=1260716016&web_id=1260716016" language="JavaScript"></script>
+  </div>
+
+
+
+	<script async src="//dn-lbstatics.qbox.me/busuanzi/2.3/busuanzi.pure.mini.js">
+	</script>
+
+
+
+
+
+
+  </div>
+
+  <div class="modal fade" id="myModal" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true" style="display: none;">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title" id="myModalLabel">设置</h2>
+      </div>
+      <hr style="margin-top:0px; margin-bottom:0px; width:80%; border-top: 3px solid #000;">
+      <hr style="margin-top:2px; margin-bottom:0px; width:80%; border-top: 1px solid #000;">
+
+
+      <div class="modal-body">
+          <div style="margin:6px;">
+            <a data-toggle="collapse" data-parent="#accordion" href="#collapseOne" onclick="javascript:setFontSize();" aria-expanded="true" aria-controls="collapseOne">
+              正文字号大小
+            </a>
+          </div>
+          <div id="collapseOne" class="panel-collapse collapse" role="tabpanel" aria-labelledby="headingOne">
+          <div class="panel-body">
+            您已调整页面字体大小
+          </div>
+        </div>
+      
+
+
+          <div style="margin:6px;">
+            <a data-toggle="collapse" data-parent="#accordion" href="#collapseTwo" onclick="javascript:setBackground();" aria-expanded="true" aria-controls="collapseTwo">
+              夜间护眼模式
+            </a>
+        </div>
+          <div id="collapseTwo" class="panel-collapse collapse" role="tabpanel" aria-labelledby="headingTwo">
+          <div class="panel-body">
+            夜间模式已经开启，再次单击按钮即可关闭 
+          </div>
+        </div>
+
+        <div>
+            <a data-toggle="collapse" data-parent="#accordion" href="#collapseThree" aria-expanded="true" aria-controls="collapseThree">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;关 于&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</a>
+        </div>
+         <div id="collapseThree" class="panel-collapse collapse" role="tabpanel" aria-labelledby="headingThree">
+          <div class="panel-body">
+            开心每一天
+          </div>
+          <div class="panel-body">
+            Copyright © 2018 开心每一天 All Rights Reserved.
+          </div>
+        </div>
+      </div>
+
+
+      <hr style="margin-top:0px; margin-bottom:0px; width:80%; border-top: 1px solid #000;">
+      <hr style="margin-top:2px; margin-bottom:0px; width:80%; border-top: 3px solid #000;">
+      <div class="modal-footer">
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">×</span></button>
+      </div>
+    </div>
+  </div>
+</div>
+  
+  <a id="rocket" href="#top" class=""></a>
+  <script type="text/javascript" src="/js/totop.js?v=1.0.0" async=""></script>
+  
+    <a id="menu-switch"><i class="fa fa-bars fa-lg"></i></a>
+  
+</body>
+</html>
